@@ -1,0 +1,74 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: Go
+
+on:
+ issues:
+   types:
+     - opened
+
+jobs:
+  # 镜像转换任务
+  mirror_transition:
+    # 运行环境
+    runs-on: ubuntu-latest
+    # 运行条件 => issues 的 label 包含 hub-mirror
+    if: contains(github.event.issue.labels.*.name, 'hub-mirror')
+    # 镜像转换任务的步骤列表
+    steps:
+      # 1. 切换分支（默认主分支）
+      - name: Check out code
+        uses: actions/checkout@v2
+      # 2. 设置 go 环境
+      - name: Setup go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.19'
+      # 3. 运行 go 代码
+      - name: Run code
+        run: go run main.go --username=${{ secrets.DOCKER_USERNAME }} --password=${{ secrets.DOCKER_TOKEN }} --repository=${{ secrets.DOCKER_REPOSITORY }} --content='${{ github.event.issue.body }}' --maxContent=11 --outputPath=output.md
+      # 4. 当成功输出 output.md 文件时，为 issues 添加评论
+      - name: Add comment
+        if: ${{ hashFiles('output.md') }}
+        uses: actions/github-script@v5
+        with:
+          script: |
+            const fs = require('fs')
+            const data = fs.readFileSync('output.md', 'utf8')
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: data
+            })
+      # 5. 当以上步骤成功时，为 issues 添加 success 标签
+      - name: Success issues
+        if: ${{ success() }}
+        uses: actions/github-script@v5
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['success']
+            })
+      # 6. 当以上步骤失败时，为 issues 添加 failure 标签，并为其添加失败原因评论
+      - name: Failure issues
+        if: ${{ failure() }}
+        uses: actions/github-script@v5
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['failure']
+            })
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "[构建失败，点击查看](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            })
