@@ -1,0 +1,2 @@
+本仓库可以使用issue来进行迁移gcr的镜像到dockerhub中。
+具体可以看一下issue中是什么怎么写的，注意一定要打上label的hub-mirror
